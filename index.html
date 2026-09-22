@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>🌻 Feliz 21 de Septiembre 💛🐾</title>
+<link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Quicksand:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  :root{
+    --safe-t: env(safe-area-inset-top, 0px);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-l: env(safe-area-inset-left, 0px);
+    --safe-r: env(safe-area-inset-right, 0px);
+  }
+  html, body { width:100%; height:100%; overflow:hidden; background:#87CEEB; overscroll-behavior:none; }
+  body { font-family:'Quicksand', sans-serif; touch-action:manipulation; }
+  canvas { display:block; position:fixed; inset:0; cursor:pointer; }
+  #hint {
+    position:fixed; top:calc(20px + var(--safe-t)); left:50%; transform:translateX(-50%);
+    background:rgba(255,255,255,.75); backdrop-filter:blur(6px);
+    padding:9px 18px; border-radius:50px; color:#6b5200;
+    font-weight:700; font-size:clamp(12px,3.4vw,17px);
+    box-shadow:0 4px 15px rgba(0,0,0,.15);
+    animation:hintPulse 2.2s ease-in-out infinite;
+    pointer-events:none; z-index:10; transition:opacity 1.5s;
+    max-width:88vw; text-align:center;
+  }
+  @keyframes hintPulse { 0%,100%{transform:translateX(-50%) scale(1)} 50%{transform:translateX(-50%) scale(1.06)} }
+  #title {
+    position:fixed; bottom:calc(12px + var(--safe-b)); left:50%; transform:translateX(-50%);
+    color:rgba(255,255,255,.85); font-size:11px; letter-spacing:2px;
+    text-transform:uppercase; pointer-events:none; z-index:10; text-shadow:0 1px 4px rgba(0,0,0,.3);
+    white-space:nowrap;
+  }
+  /* Espacio reservado al fondo de la pantalla para la foto del perro (PNG) */
+  #dogPhoto {
+    position:fixed;
+    left:50%;
+    bottom:calc(28px + var(--safe-b));
+    transform:translateX(-50%);
+    width:min(46vw, 220px);
+    height:auto;
+    pointer-events:none;   /* deja pasar los toques hacia el canvas para plantar flores */
+    z-index:8;             /* sobre el canvas, debajo del hint/title si se traslapan */
+    filter:drop-shadow(0 6px 10px rgba(0,0,0,.25));
+  }
+</style>
+<base target="_blank">
+</head>
+<body>
+<canvas id="scene"></canvas>
+<div id="hint">🌻 Toca la pantalla para más flores amarillas 💛</div>
+<div id="title">21 · Septiembre · 🐾</div>
+
+<!-- AQUÍ VA LA IMAGEN DEL PERRO (PNG) -->
+<!-- Reemplaza "TU-IMAGEN-PERRO.png" por el archivo real, o pégala en base64
+     (src="data:image/png;base64,....") para que quede todo en un solo archivo -->
+<img id="dogPhoto" src="Snoopy-removebg-preview.png" alt="Perrito" />
+
+
+<script>
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d');
+let W, H, DPR;
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+resize();
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+
+/* ============ UTILS ============ */
+const rand = (a, b) => a + Math.random() * (b - a);
+const TAU = Math.PI * 2;
+const PETALS = ['#FFD93D', '#FFC93C', '#F7C31F', '#FFE066', '#FFDF3D'];
+const isMobile = Math.min(window.innerWidth, window.innerHeight) < 500;
+
+/* ============ SKY & LAND ============ */
+function drawSky(t) {
+  const g = ctx.createLinearGradient(0, 0, 0, H * 0.75);
+  g.addColorStop(0, '#4FA8E8');
+  g.addColorStop(0.55, '#8FD0F5');
+  g.addColorStop(1, '#FFF3B0');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  const sx = W * 0.78, sy = H * 0.16;
+  const pulse = 1 + Math.sin(t * 0.0012) * 0.04;
+  const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, 120 * pulse);
+  glow.addColorStop(0, 'rgba(255,240,150,.95)');
+  glow.addColorStop(0.4, 'rgba(255,220,90,.45)');
+  glow.addColorStop(1, 'rgba(255,220,90,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(sx, sy, 120 * pulse, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#FFE873';
+  ctx.beginPath(); ctx.arc(sx, sy, 38 * pulse, 0, TAU); ctx.fill();
+}
+
+/* Clouds */
+const clouds = [];
+for (let i = 0; i < 7; i++) {
+  clouds.push({
+    x: Math.random() * 2000, y: rand(0.05, 0.30),
+    s: rand(0.55, 1.3), v: rand(0.15, 0.45), puffs: 4 + (Math.random() * 3 | 0)
+  });
+}
+function drawClouds() {
+  clouds.forEach(c => {
+    c.x += c.v;
+    if (c.x - 200 * c.s > W) c.x = -250 * c.s;
+    const cy = H * c.y;
+    ctx.fillStyle = 'rgba(255,255,255,.88)';
+    ctx.beginPath();
+    for (let i = 0; i < c.puffs; i++) {
+      const px = c.x + (i - c.puffs / 2) * 34 * c.s;
+      const pr = (24 + Math.sin(i * 2.1) * 7) * c.s;
+      ctx.moveTo(px + pr, cy);
+      ctx.arc(px, cy, pr, 0, TAU);
+    }
+    ctx.fill();
+  });
+}
+
+/* Hills / grass */
+function hillY(x, base, amp, freq, phase) {
+  return base + Math.sin(x * freq + phase) * amp + Math.sin(x * freq * 2.7 + phase * 1.7) * amp * 0.4;
+}
+function drawHills() {
+  const layers = [
+    { base: H * 0.62, amp: 24, freq: 0.0022, color: '#9CCB4A', phase: 1.3 },
+    { base: H * 0.70, amp: 32, freq: 0.0018, color: '#7DBA38', phase: 4.1 },
+    { base: H * 0.80, amp: 38, freq: 0.0015, color: '#5FA82E', phase: 7.7 }
+  ];
+  layers.forEach(L => {
+    ctx.fillStyle = L.color;
+    ctx.beginPath();
+    ctx.moveTo(0, H);
+    for (let x = 0; x <= W; x += 8) ctx.lineTo(x, hillY(x, L.base, L.amp, L.freq, L.phase));
+    ctx.lineTo(W, H);
+    ctx.closePath(); ctx.fill();
+  });
+  const g = ctx.createLinearGradient(0, H * 0.78, 0, H);
+  g.addColorStop(0, '#4E9A26');
+  g.addColorStop(1, '#2F6E14');
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let x = 0; x <= W; x += 8) ctx.lineTo(x, hillY(x, H * 0.86, 28, 0.0013, 2.2));
+  ctx.lineTo(W, H);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(40,110,20,.55)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 80; i++) {
+    const bx = (i / 80) * W + Math.sin(i * 7) * 20;
+    const by = H * 0.9 + Math.sin(i * 3.3) * H * 0.06;
+    const bh = 9 + (i % 5) * 4;
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.quadraticCurveTo(bx + Math.sin(i) * 5, by - bh * 0.6, bx + Math.sin(i * 2) * 9, by - bh);
+    ctx.stroke();
+  }
+}
+
+/* ============ FLOWERS ============ */
+const flowers = [];
+function makeFlower(x, y, depth, pop = true) {
+  const type = Math.random() < 0.45 ? 'sunflower' : 'daisy';
+  return {
+    x, y, depth,
+    h: rand(40, 100) * (0.6 + depth * 0.55),
+    size: rand(10, 20) * (0.6 + depth * 0.6),
+    type,
+    petals: type === 'sunflower' ? 16 : (8 + (Math.random() * 4 | 0)),
+    color: PETALS[(Math.random() * PETALS.length) | 0],
+    phase: Math.random() * TAU,
+    swayFreq: rand(0.0009, 0.0016),
+    swayAmp: rand(6, 15),
+    popT: pop ? 0 : 1,
+    leafAt: rand(0.3, 0.55),
+    born: performance.now()
+  };
+}
+const fieldCount = isMobile ? 100 : 150;
+for (let i = 0; i < fieldCount; i++) {
+  const depth = Math.random();
+  const y = H * (0.66 + depth * 0.32);
+  flowers.push(makeFlower(Math.random() * W, y, depth, false));
+}
+flowers.sort((a, b) => a.depth - b.depth);
+
+function drawFlower(f, t) {
+  const grow = f.popT;
+  if (grow <= 0.01) return;
+  const h = f.h * grow;
+  const sway = Math.sin(t * f.swayFreq + f.phase) * f.swayAmp * (0.5 + f.depth);
+  const hx = f.x + sway;
+  const hy = f.y - h;
+
+  ctx.strokeStyle = '#3E7C1E';
+  ctx.lineWidth = Math.max(1.5, 3 * (0.5 + f.depth));
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(f.x, f.y);
+  ctx.quadraticCurveTo(f.x + sway * 0.3, f.y - h * 0.55, hx, hy);
+  ctx.stroke();
+
+  if (grow > 0.5) {
+    const lx = f.x + sway * 0.3, ly = f.y - h * f.leafAt;
+    ctx.fillStyle = '#4C9423';
+    ctx.beginPath();
+    ctx.ellipse(lx + 8, ly, 10 * (0.5 + f.depth), 4.2, -0.5, 0, TAU);
+    ctx.fill();
+  }
+
+  const s = f.size * grow;
+  ctx.save();
+  ctx.translate(hx, hy);
+  ctx.rotate(Math.sin(t * f.swayFreq + f.phase + 1) * 0.12);
+
+  if (f.type === 'sunflower') {
+    ctx.fillStyle = f.color;
+    for (let i = 0; i < f.petals; i++) {
+      const a = (i / f.petals) * TAU;
+      ctx.save(); ctx.rotate(a);
+      ctx.beginPath();
+      ctx.ellipse(s * 0.75, 0, s * 0.62, s * 0.2, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle = '#F5A623';
+    for (let i = 0; i < f.petals; i++) {
+      const a = ((i + 0.5) / f.petals) * TAU;
+      ctx.save(); ctx.rotate(a);
+      ctx.beginPath();
+      ctx.ellipse(s * 0.5, 0, s * 0.42, s * 0.14, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle = '#5C3A0F';
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.42, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#7A5220';
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * TAU, r = s * 0.22 + (i % 2) * s * 0.12;
+      ctx.beginPath(); ctx.arc(Math.cos(a) * r, Math.sin(a) * r, s * 0.045, 0, TAU); ctx.fill();
+    }
+  } else {
+    ctx.fillStyle = f.color;
+    for (let i = 0; i < f.petals; i++) {
+      const a = (i / f.petals) * TAU;
+      ctx.save(); ctx.rotate(a);
+      ctx.beginPath();
+      ctx.ellipse(s * 0.6, 0, s * 0.58, s * 0.24, 0, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle = '#B8860B';
+    ctx.beginPath(); ctx.arc(0, 0, s * 0.34, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#E8A93D';
+    ctx.beginPath(); ctx.arc(-s * 0.08, -s * 0.08, s * 0.2, 0, TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/* ============ BUTTERFLIES ============ */
+const butterflies = [];
+for (let i = 0; i < 4; i++) {
+  butterflies.push({
+    x: Math.random() * W, y: rand(H * 0.28, H * 0.55),
+    vx: rand(0.3, 0.8) * (Math.random() < 0.5 ? -1 : 1),
+    ph: Math.random() * TAU, s: rand(0.65, 1.1), hue: Math.random() < 0.6 ? '#FFDE59' : '#FFF3B0'
+  });
+}
+function drawButterflies(t) {
+  butterflies.forEach(b => {
+    b.x += b.vx;
+    b.y += Math.sin(t * 0.002 + b.ph) * 0.6;
+    if (b.x < -40) b.x = W + 40; if (b.x > W + 40) b.x = -40;
+    const flap = Math.sin(t * 0.018 + b.ph) * 0.9;
+    ctx.save();
+    ctx.translate(b.x, b.y);
+    ctx.scale(b.s, b.s);
+    ctx.fillStyle = b.hue;
+    [[-1, flap], [1, -flap]].forEach(([side, f]) => {
+      ctx.save();
+      ctx.rotate(f * 0.6);
+      ctx.beginPath();
+      ctx.ellipse(side * 7, -4, 8, 5, side * 0.6, 0, TAU);
+      ctx.ellipse(side * 6, 4, 6, 4, side * -0.4, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    });
+    ctx.fillStyle = '#4a3b12';
+    ctx.fillRect(-1, -6, 2, 12);
+    ctx.restore();
+  });
+}
+
+/* ============ ORIGINAL CARTOON DOG ============ */
+/* Perrito propio (no es ningún personaje registrado): blanco, orejas cafés,
+   sentado entre las flores, parpadea, mueve la cola y da saltitos de alegría. */
+const dog = {
+  x: 0, y: 0, scale: 1,
+  nextBlink: performance.now() + rand(2000, 4000),
+  blinkUntil: 0,
+  nextHop: performance.now() + rand(4000, 7000),
+  hopT: 0, hopping: false,
+  bornWag: performance.now()
+};
+function placeDog() {
+  dog.x = W * (isMobile ? 0.28 : 0.20);
+  dog.y = H * 0.90;
+  dog.scale = Math.min(1.15, Math.max(0.75, (isMobile ? W / 420 : W / 900)));
+}
+placeDog();
+window.addEventListener('resize', placeDog);
+
+function updateDog(t) {
+  if (t > dog.nextBlink) {
+    dog.blinkUntil = t + 140;
+    dog.nextBlink = t + rand(2500, 5000);
+  }
+  if (!dog.hopping && t > dog.nextHop) {
+    dog.hopping = true; dog.hopT = 0;
+  }
+  if (dog.hopping) {
+    dog.hopT += 0.045;
+    if (dog.hopT >= 1) { dog.hopping = false; dog.nextHop = t + rand(5000, 9000); }
+  }
+}
+
+function drawDog(t) {
+  const s = dog.scale;
+  const earSway = Math.sin(t * 0.0026) * 6;
+  const tailWag = Math.sin(t * 0.012) * 26;
+  const blink = t < dog.blinkUntil;
+  const hopArc = dog.hopping ? Math.sin(dog.hopT * Math.PI) : 0;
+  const hopY = -hopArc * 26 * s;
+  const squashX = 1 + hopArc * 0.08;
+  const squashY = 1 - hopArc * 0.10;
+
+  ctx.save();
+  ctx.translate(dog.x, dog.y + hopY);
+  ctx.scale(s * squashX, s * squashY);
+
+  // sombra
+  ctx.save();
+  ctx.translate(0, -hopY * 0 + 4);
+  ctx.globalAlpha = 0.18 * (1 - hopArc * 0.6);
+  ctx.fillStyle = '#1b3a08';
+  ctx.beginPath(); ctx.ellipse(0, 34, 46, 10, 0, 0, TAU); ctx.fill();
+  ctx.restore();
+
+  // cola
+  ctx.save();
+  ctx.translate(40, -6);
+  ctx.rotate((tailWag) * Math.PI / 180 * 0.5 - 0.3);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 11;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(22, -18, 30, -34);
+  ctx.stroke();
+  ctx.strokeStyle = '#5b3a29';
+  ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.arc(30, -34, 5, 0, TAU); ctx.stroke();
+  ctx.restore();
+
+  // patas traseras
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.ellipse(-24, 26, 12, 9, 0, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(14, 28, 12, 9, 0, 0, TAU); ctx.fill();
+
+  // cuerpo
+  ctx.beginPath(); ctx.ellipse(0, 2, 42, 30, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.06)'; ctx.lineWidth = 1.5; ctx.stroke();
+
+  // patas delanteras
+  ctx.beginPath(); ctx.ellipse(-30, 24, 9, 12, 0.15, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(-6, 26, 9, 12, -0.1, 0, TAU); ctx.fill();
+
+  // cabeza
+  const headX = -34, headY = -26;
+  ctx.beginPath(); ctx.ellipse(headX, headY, 26, 23, 0, 0, TAU); ctx.fill();
+
+  // orejas (cafés, caídas hacia los lados)
+  ctx.fillStyle = '#6b4530';
+  ctx.save();
+  ctx.translate(headX - 18, headY - 4);
+  ctx.rotate((-0.35 + earSway * 0.01));
+  ctx.beginPath(); ctx.ellipse(0, 10, 9, 19, 0.2, 0, TAU); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.translate(headX + 14, headY - 8);
+  ctx.rotate((0.5 - earSway * 0.01));
+  ctx.beginPath(); ctx.ellipse(0, 10, 9, 18, -0.15, 0, TAU); ctx.fill();
+  ctx.restore();
+
+  // mancha café en un ojo (para diferenciar del cachorro genérico)
+  ctx.fillStyle = '#6b4530';
+  ctx.beginPath(); ctx.ellipse(headX - 10, headY - 6, 9, 11, 0.3, 0, TAU); ctx.fill();
+
+  // ojos
+  ctx.fillStyle = '#2a2a2a';
+  if (blink) {
+    ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(headX - 6, headY - 2); ctx.lineTo(headX + 1, headY - 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(headX + 8, headY - 3); ctx.lineTo(headX + 15, headY - 3); ctx.stroke();
+  } else {
+    ctx.beginPath(); ctx.arc(headX - 3, headY - 2, 3.4, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(headX + 11, headY - 3, 3.4, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(headX - 4, headY - 3.4, 1.1, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc(headX + 10, headY - 4.4, 1.1, 0, TAU); ctx.fill();
+  }
+
+  // hocico
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.ellipse(headX + 5, headY + 10, 12, 9, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#2a2a2a';
+  ctx.beginPath(); ctx.ellipse(headX + 12, headY + 7, 3.6, 2.8, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = '#2a2a2a'; ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(headX + 12, headY + 10);
+  ctx.quadraticCurveTo(headX + 8, headY + 16, headX + 2, headY + 13);
+  ctx.moveTo(headX + 8, headY + 16);
+  ctx.quadraticCurveTo(headX + 12, headY + 18, headX + 16, headY + 13);
+  ctx.stroke();
+
+  // collar
+  ctx.strokeStyle = '#F5A623'; ctx.lineWidth = 5;
+  ctx.beginPath(); ctx.arc(headX + 6, headY + 20, 12, 0.15, Math.PI - 0.15); ctx.stroke();
+  ctx.fillStyle = '#e04b3c';
+  ctx.beginPath(); ctx.arc(headX + 6, headY + 30, 3, 0, TAU); ctx.fill();
+
+  ctx.restore();
+
+  // corazoncitos cuando salta de alegría
+  if (dog.hopping && dog.hopT > 0.35 && dog.hopT < 0.55 && Math.random() < 0.35) {
+    burstHearts(dog.x - 10 * s, dog.y - 70 * s, 2);
+  }
+}
+
+/* ============ PETAL / HEART PARTICLES ============ */
+const petals = [];
+function burstPetals(x, y, n) {
+  for (let i = 0; i < n; i++) {
+    petals.push({
+      x, y, vx: rand(-2.5, 2.5), vy: rand(-4, -1),
+      rot: rand(0, TAU), vr: rand(-0.15, 0.15),
+      s: rand(4, 9), life: 1, decay: rand(0.004, 0.01),
+      color: PETALS[(Math.random() * PETALS.length) | 0], kind: 'petal'
+    });
+  }
+}
+function burstHearts(x, y, n) {
+  for (let i = 0; i < n; i++) {
+    petals.push({
+      x, y, vx: rand(-0.6, 0.6), vy: rand(-1.6, -0.9),
+      rot: 0, vr: 0,
+      s: rand(6, 10), life: 1, decay: rand(0.01, 0.016),
+      color: '#ff6f91', kind: 'heart'
+    });
+  }
+}
+function drawPetals() {
+  for (let i = petals.length - 1; i >= 0; i--) {
+    const p = petals[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.06; p.vx *= 0.985;
+    p.rot += p.vr; p.life -= p.decay;
+    if (p.life <= 0 || p.y > H + 20) { petals.splice(i, 1); continue; }
+    ctx.save();
+    ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+    ctx.globalAlpha = Math.min(1, p.life * 2);
+    ctx.fillStyle = p.color;
+    if (p.kind === 'heart') {
+      const hs = p.s;
+      ctx.beginPath();
+      ctx.moveTo(0, hs * 0.3);
+      ctx.bezierCurveTo(-hs, -hs * 0.6, -hs * 0.2, -hs * 1.2, 0, -hs * 0.3);
+      ctx.bezierCurveTo(hs * 0.2, -hs * 1.2, hs, -hs * 0.6, 0, hs * 0.3);
+      ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.ellipse(0, 0, p.s, p.s * 0.45, 0, 0, TAU); ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ============ FLOATING PHRASES ============ */
+const PHRASES = ['Feliz 21 de septiembre compare :3', '🐾 Guau, compare :3', '🌻 Feliz 21 de septiembre ☁️'];
+const bubbles = [];
+let nextBubbleAt = performance.now() + 2500;
+
+function spawnBubble() {
+  const text = PHRASES[(Math.random() * PHRASES.length) | 0];
+  bubbles.push({
+    text, born: performance.now(),
+    x: rand(W * 0.2, W * 0.8), y: H * 0.40,
+    dur: 5200, hue: rand(0, 1) < 0.5 ? '#FFD93D' : '#FFF0A0'
+  });
+  burstPetals(rand(W * 0.2, W * 0.8), H * 0.5, 16);
+}
+
+function drawBubbles(t) {
+  if (t > nextBubbleAt) { spawnBubble(); nextBubbleAt = t + rand(7000, 13000); }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (let i = bubbles.length - 1; i >= 0; i--) {
+    const b = bubbles[i];
+    const age = t - b.born;
+    if (age > b.dur) { bubbles.splice(i, 1); continue; }
+    const p = age / b.dur;
+    const inA = Math.min(1, age / 500);
+    const outA = p > 0.8 ? (1 - p) / 0.2 : 1;
+    const alpha = Math.min(inA, outA);
+    const scale = p < 0.12 ? 0.4 + (p / 0.12) * 0.6 : 1 + Math.sin(p * Math.PI) * 0.05;
+    const floatY = Math.sin(p * Math.PI * 2) * 12 - p * 20;
+
+    const fs = Math.min(W * (isMobile ? 0.062 : 0.07), 40);
+    ctx.save();
+    ctx.translate(b.x, b.y + floatY);
+    ctx.scale(scale, scale);
+    ctx.globalAlpha = alpha;
+
+    ctx.font = `700 ${fs}px Pacifico, cursive`;
+    const tw = ctx.measureText(b.text).width;
+    const cw = Math.min(tw + 110, W * 0.92 / Math.max(scale, 0.001));
+    const puff = fs * 0.55;
+    const n = Math.max(5, Math.round(cw / (puff * 1.1)));
+    ctx.save();
+    ctx.shadowColor = 'rgba(90,130,180,.35)';
+    ctx.shadowBlur = 16;
+    ctx.shadowOffsetY = 7;
+    ctx.fillStyle = 'rgba(255,255,255,.92)';
+    ctx.beginPath();
+    ctx.roundRect(-cw / 2, -puff * 0.45, cw, puff * 1.5, puff * 0.75);
+    ctx.fill();
+    for (let i = 0; i < n; i++) {
+      const px = -cw / 2 + (i / (n - 1)) * cw;
+      const py = -puff * 0.45 - Math.sin((i / (n - 1)) * Math.PI) * puff * 0.55;
+      const pr = puff * (0.75 + Math.sin(i * 1.7) * 0.18);
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, TAU);
+      ctx.fill();
+    }
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(160,200,240,.6)';
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.roundRect(-cw / 2, -puff * 0.45, cw, puff * 1.5, puff * 0.75);
+    ctx.stroke();
+
+    ctx.shadowColor = 'rgba(180,120,0,.45)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = '#8a6100';
+    ctx.fillText(b.text, 0, 0, cw * 0.9);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ============ CLICK / TOQUE -> MÁS FLORES ============ */
+function plantAt(px, py) {
+  const n = (isMobile ? 5 : 7) + (Math.random() * 6 | 0);
+  for (let i = 0; i < n; i++) {
+    const depth = rand(0.35, 1);
+    const x = px + rand(-90, 90);
+    const y = Math.max(H * 0.6, py + rand(-25, 55));
+    const f = makeFlower(x, Math.min(y, H * 0.99), depth, true);
+    f.popDelay = i * 90;
+    flowers.push(f);
+  }
+  flowers.sort((a, b) => a.depth - b.depth);
+  burstPetals(px, py, 14);
+
+  // si tocan cerca del perrito, salta de alegría
+  const dx = px - dog.x, dy = py - dog.y;
+  if (Math.sqrt(dx * dx + dy * dy) < 90 * dog.scale) {
+    dog.hopping = true; dog.hopT = 0;
+    burstHearts(dog.x, dog.y - 60 * dog.scale, 5);
+  }
+
+  const hint = document.getElementById('hint');
+  if (hint.style.opacity !== '0') {
+    setTimeout(() => hint.style.opacity = '0', 1200);
+  }
+}
+canvas.addEventListener('pointerdown', e => plantAt(e.clientX, e.clientY));
+
+setInterval(() => {
+  if (flowers.length > (isMobile ? 300 : 420)) return;
+  const f = makeFlower(Math.random() * W, rand(H * 0.7, H * 0.98), rand(0.4, 1), true);
+  flowers.push(f);
+  flowers.sort((a, b) => a.depth - b.depth);
+}, 2200);
+
+/* ============ MAIN LOOP ============ */
+function frame(t) {
+  drawSky(t);
+  drawClouds();
+  drawHills();
+  for (const f of flowers) {
+    if (f.popDelay && t - f.born > f.popDelay) { f.popT = Math.min(1, (t - f.born - f.popDelay) / 700); }
+    else if (!f.popDelay) f.popT = Math.min(1, (t - f.born) / 700);
+    drawFlower(f, t);
+  }
+  updateDog(t);
+  drawDog(t);
+  drawPetals();
+  drawButterflies(t);
+  drawBubbles(t);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
